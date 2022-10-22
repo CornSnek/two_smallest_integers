@@ -11,10 +11,7 @@
 				"$rustc"
 			],
 			"label": "rust: cargo run --release",
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			}
+			"group": "build"
 		},
 		{
 			"type": "cargo",
@@ -23,7 +20,10 @@
 				"$rustc"
 			],
 			"label": "rust: cargo run",
-			"group": "build"
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
 		}
 	]
 }

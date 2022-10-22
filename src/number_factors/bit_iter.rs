@@ -4,7 +4,7 @@
 //Example: If V={1,2,3}, then A,B={2},{1,3} and A,B={1,3},{2} is counted as 1 only.
 //This is valid if size is >=2.
 //There is a special case for size 1 for this code, where B can be empty.
-pub struct BitCombinationsIter{
+pub(super) struct BitCombinationsIter{
     bitcomb:u64, //Number represented as 1s and 0s
     bitcomb_last:u64, //If all bits reached this number.
     bits:usize,
@@ -13,7 +13,8 @@ pub struct BitCombinationsIter{
     check_half_last: bool //For an even set, stop iterating where boolean values are flipped.
 }
 impl BitCombinationsIter{
-    pub fn new(size:usize)->Self{
+    pub(super) fn new(size:usize)->Self{
+        assert!(size!=0,"Size cannot be 0");
         Self{bitcomb:1u64,
             bitcomb_last:bits_end_mask(size,1usize),
             bits:1usize,
@@ -35,7 +36,7 @@ impl Iterator for BitCombinationsIter{
             if self.bitcomb!=self.bitcomb_last{
                 self.bitcomb=next_bit_lex(self.bitcomb);
             }else{
-                if self.bits==1&&self.size==1{return None;} //If SplitVectorIter::size is 1.
+                if self.bits==1&&(self.size==1||self.size==3){return None;} //Code can break if 1 or 3.
                 self.bits+=1;
                 if self.bits%(self.size/2)==0{
                     self.check_half_last=true;

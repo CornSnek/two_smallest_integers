@@ -2,9 +2,9 @@ mod utils;
 pub mod bit_iter;
 #[derive(Copy, Clone)]
 pub enum CalcOperations{
-    None,
-    Started,
-    Done,
+    StartedFactors,
+    StartedIntegerMult,
+    Finished,
     Cancelled
 }
 pub struct NumberFactors{
@@ -21,7 +21,7 @@ impl NumberFactors{
         let number_div_left_sr=Arc::new(Mutex::new(number));
         let factors_sr=Arc::new(Mutex::new(vec![1u64]));//Always divisible by 1. Divisors from smallest to largest.
         let keep_read_sr=Arc::new(Mutex::new(true));
-        let status_sr=Arc::new(Mutex::new(CalcOperations::Started));
+        let status_sr=Arc::new(Mutex::new(CalcOperations::StartedFactors));
         let number_div_sr_write=number_div_sr.clone();
         let number_div_left_sr_write=number_div_left_sr.clone();
         let factors_sr_write=factors_sr.clone();
@@ -44,7 +44,7 @@ impl NumberFactors{
                 *number_div_sr=number_div;
             }
             let mut status_sr=status_sr_write.lock().unwrap();
-            while matches!(*status_sr,CalcOperations::Started)&&number_div<=number_div_left{//If divisor number_div can still divide into number_cpy.
+            while matches!(*status_sr,CalcOperations::StartedFactors)&&number_div<=number_div_left&&number_div_left!=1{//If divisor number_div can still divide into number_cpy.
                 drop(status_sr);
                 while number_div_left%number_div==0{
                     if let Ok(mut factors)=factors_sr_write.lock(){
@@ -83,7 +83,7 @@ impl NumberFactors{
             let mut keep_read=keep_read_sr_read.lock().unwrap();
             let mut status_sr=status_sr_read.lock().unwrap();
             println!("Finding factors for this number. This may take very long if this number has very large prime number factors or if the number of factors is very large.\n\n\n");
-            while matches!(*status_sr,CalcOperations::Started)&&*keep_read{
+            while matches!(*status_sr,CalcOperations::StartedFactors)&&*keep_read{
                 print!("\x1b[3F\x1b[0J");
                 drop(keep_read);
                 drop(status_sr);
@@ -97,8 +97,8 @@ impl NumberFactors{
                 keep_read=keep_read_sr_read.lock().unwrap();
                 status_sr=status_sr_read.lock().unwrap();
             }
-            if matches!(*status_sr,CalcOperations::Started){
-                *status_sr=CalcOperations::Done;//Tell main thread to not cancel when pressing enter.
+            if matches!(*status_sr,CalcOperations::StartedFactors){
+                *status_sr=CalcOperations::StartedIntegerMult;//Tell main thread to not cancel when pressing enter.
             }
             if let (Ok(number_div),Ok(number_div_left),Ok(factors))
                 =(number_div_sr_read.lock(),number_div_left_sr_read.lock(),factors_sr_read.lock()){
@@ -110,7 +110,7 @@ impl NumberFactors{
         });
         if let Ok(())=utils::do_enter_wait(){
             if let Ok(mut status)=status_sr.lock(){
-                if matches!(*status,CalcOperations::Started){
+                if matches!(*status,CalcOperations::StartedFactors){
                     *status=CalcOperations::Cancelled;
                 }
             }
@@ -132,7 +132,9 @@ impl NumberFactors{
         //abs_v,int_lhs,and int_rhs,v_lhs,v_rhs,and a bool to stop reading.
         let srs:Arc<Mutex<(u64,u64,u64,Vec<u64>,Vec<u64>,u64,bool)>>=Arc::new(Mutex::new((u64::MAX,1u64,1u64,Vec::new(),Vec::new(),0u64,true)));
         let srs_write=srs.clone();
-        let self_cpy_write=Self{number:self.number,factors:self.factors.clone(),status:CalcOperations::None};
+        let status_sr=Arc::new(Mutex::new(CalcOperations::StartedIntegerMult));
+        let self_cpy_write=Self{number:self.number,factors:self.factors.clone(),status:CalcOperations::StartedIntegerMult};
+        let status_sr_write=status_sr.clone();
         let write_handle=thread::spawn(move||{
             let mut abs_v=u64::MAX;
             let mut int_lhs:u64=1;
@@ -140,6 +142,11 @@ impl NumberFactors{
             let bc_iter=bit_iter::BitCombinationsIter::new(self_cpy_write.factors.len());
             if self_cpy_write.number!=1{
                 for num_vec in bc_iter{
+                    if let Ok(status)=status_sr_write.lock(){
+                        if matches!(*status,CalcOperations::Cancelled){
+                            return;
+                        }
+                    }
                     if let Ok(mut srs_w)=srs_write.lock(){
                         srs_w.5=num_vec;
                     }
@@ -192,9 +199,12 @@ impl NumberFactors{
         });
         let srs_read=srs.clone();
         let vec_size=self.factors.len();
+        let status_sr_read=status_sr.clone();
         let read_handle=thread::spawn(move||{
             let mut srs_r=srs_read.lock().unwrap();
-            while srs_r.6{
+            let mut status=status_sr_read.lock().unwrap();
+            while matches!(*status,CalcOperations::StartedIntegerMult)&&srs_r.6{
+                drop(status);
                 let (abs_v,int_lhs,int_rhs,v_lhs,v_rhs,vec_split)=(srs_r.0,srs_r.1,srs_r.2,srs_r.3.clone(),srs_r.4.clone(),srs_r.5.clone());
                 drop(srs_r);
                 use std::io::Write;
@@ -204,16 +214,32 @@ impl NumberFactors{
                 }
                 println!("\na: {} := {}\nb: {} := {}\n|a-b|: {}\n(Still in progress)",int_lhs,utils::print_factors_helper(&v_lhs),int_rhs,utils::print_factors_helper(&v_rhs),abs_v);
                 thread::sleep(std::time::Duration::from_millis(100));
-                print!("\x1b[5F\x1b[0J");
                 srs_r=srs_read.lock().unwrap();
+                status=status_sr_read.lock().unwrap();
+                if srs_r.6&&matches!(*status,CalcOperations::StartedIntegerMult){ print!("\x1b[5F\x1b[0J"); };
             }
+            if matches!(*status,CalcOperations::StartedIntegerMult){
+                *status=CalcOperations::Finished;
+                println!("Finished! Press enter to see results.");
+            }
+            drop(status);
             drop(srs_r);
         });
+        if let Ok(())=utils::do_enter_wait(){
+            if let Ok(mut status)=status_sr.lock(){
+                if matches!(*status,CalcOperations::StartedIntegerMult){
+                    *status=CalcOperations::Cancelled;
+                    println!("Cancelled by pressing enter.");
+                }
+            }
+        }
         write_handle.join().unwrap();
         read_handle.join().unwrap();
+        let status=status_sr.lock().unwrap();
+        if matches!(*status,CalcOperations::Cancelled){ return; }
         if let Ok(srs_get)=srs.lock(){
             println!("a: {} := {}\nb: {} := {}\n|a-b|: {}",srs_get.1,utils::print_factors_helper(&srs_get.3),srs_get.2,utils::print_factors_helper(&srs_get.4),srs_get.0);
         };
-        println!("Done!\n");
+        println!("");
     }
 }
