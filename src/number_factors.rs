@@ -23,36 +23,36 @@ impl NumberFactors{
         let keep_read_sr=Arc::new(Mutex::new(true));
         let status_sr=Arc::new(Mutex::new(CalcOperations::StartedFactors));
         let write_handle=thread::spawn({
-            let number_div_sr_write=number_div_sr.clone();
-            let number_div_left_sr_write=number_div_left_sr.clone();
-            let factors_sr_write=factors_sr.clone();
-            let keep_read_sr_write=keep_read_sr.clone();
-            let status_sr_write=status_sr.clone();
+            let number_div_sr=number_div_sr.clone();
+            let number_div_left_sr=number_div_left_sr.clone();
+            let factors_sr=factors_sr.clone();
+            let keep_read_sr=keep_read_sr.clone();
+            let status_sr=status_sr.clone();
             move||{
             let mut number_div_left=number;
             let mut number_div=2u64;//Start divisor by 2.
             while number_div_left%number_div==0{
-                if let Ok(mut factors)=factors_sr_write.lock(){
+                if let Ok(mut factors)=factors_sr.lock(){
                     factors.push(number_div);
                 }
                 number_div_left/=number_div;
-                if let Ok(mut number_div_left_sr)=number_div_left_sr_write.lock(){
+                if let Ok(mut number_div_left_sr)=number_div_left_sr.lock(){
                     *number_div_left_sr=number_div_left;
                 }
             }
             number_div=3u64;
-            if let Ok(mut number_div_sr)=number_div_sr_write.lock(){
+            if let Ok(mut number_div_sr)=number_div_sr.lock(){
                 *number_div_sr=number_div;
             }
-            let mut status_sr=status_sr_write.lock().unwrap();
-            while matches!(*status_sr,CalcOperations::StartedFactors)&&number_div<=number_div_left&&number_div_left!=1{//If divisor number_div can still divide into number_cpy.
-                drop(status_sr);
+            let mut status=status_sr.lock().unwrap();
+            while matches!(*status,CalcOperations::StartedFactors)&&number_div<=number_div_left&&number_div_left!=1{//If divisor number_div can still divide into number_cpy.
+                drop(status);
                 while number_div_left%number_div==0{
-                    if let Ok(mut factors)=factors_sr_write.lock(){
+                    if let Ok(mut factors)=factors_sr.lock(){
                         factors.push(number_div);
                     }
                     number_div_left/=number_div;
-                    if let Ok(mut number_div_left_sr)=number_div_left_sr_write.lock(){
+                    if let Ok(mut number_div_left_sr)=number_div_left_sr.lock(){
                         *number_div_left_sr=number_div_left;
                     }
                 }
@@ -60,55 +60,56 @@ impl NumberFactors{
                 if number_div*3>=number_div_left&&number_div_left!=1{//If possible prime factors are exhausted down to 3, number_div is just number_div_left then.
                     number_div=number_div_left;
                     number_div_left=1;
-                    if let (Ok(mut factors),Ok(mut number_div_left_sr))=(factors_sr_write.lock(),number_div_left_sr_write.lock()){
+                    if let (Ok(mut factors),Ok(mut number_div_left_sr))=(factors_sr.lock(),number_div_left_sr.lock()){
                         factors.push(number_div);
                         *number_div_left_sr=number_div_left;
                     }
                 }
-                if let Ok(mut number_div_sr)=number_div_sr_write.lock(){
+                if let Ok(mut number_div_sr)=number_div_sr.lock(){
                     *number_div_sr=number_div;
                 }
-                status_sr=status_sr_write.lock().unwrap();
+                status=status_sr.lock().unwrap();
             }
-            drop(status_sr);
-            if let Ok(mut keep_read)=keep_read_sr_write.lock(){
+            drop(status);
+            if let Ok(mut keep_read)=keep_read_sr.lock(){
                 *keep_read=false;
             }}}
         );
         let number_div_sr_read=number_div_sr;
         let number_div_left_sr_read=number_div_left_sr;
-        let factors_sr_read=factors_sr.clone();
-        let keep_read_sr_read=keep_read_sr;
-        let status_sr_read=status_sr.clone();
-        let read_handle=thread::spawn(move||{
-            let mut keep_read=keep_read_sr_read.lock().unwrap();
-            let mut status_sr=status_sr_read.lock().unwrap();
+        let read_handle=thread::spawn({ 
+            let factors_sr=factors_sr.clone();
+            let keep_read_sr=keep_read_sr.clone();
+            let status_sr=status_sr.clone();
+            move||{
+            let mut keep_read=keep_read_sr.lock().unwrap();
+            let mut status=status_sr.lock().unwrap();
             println!("Finding factors for this number. This may take very long if this number has very large prime number factors or if the number of factors is very large.\n\n\n");
-            while matches!(*status_sr,CalcOperations::StartedFactors)&&*keep_read{
+            while matches!(*status,CalcOperations::StartedFactors)&&*keep_read{
                 print!("\x1b[3F\x1b[0J");
                 drop(keep_read);
-                drop(status_sr);
+                drop(status);
                 if let (Ok(number_div),Ok(number_div_left),Ok(factors))
-                    =(number_div_sr_read.lock(),number_div_left_sr_read.lock(),factors_sr_read.lock()){
+                    =(number_div_sr_read.lock(),number_div_left_sr_read.lock(),factors_sr.lock()){
                     println!("Attempting to divide number {} by {}. Number left: {}",number,number_div,number_div_left);
                     println!("Current factors right now: {}",utils::print_factors_helper(&factors));
                     println!("(Still calculating)");
                 }
                 thread::sleep(std::time::Duration::from_millis(200));
-                keep_read=keep_read_sr_read.lock().unwrap();
-                status_sr=status_sr_read.lock().unwrap();
+                keep_read=keep_read_sr.lock().unwrap();
+                status=status_sr.lock().unwrap();
             }
-            if matches!(*status_sr,CalcOperations::StartedFactors){
-                *status_sr=CalcOperations::StartedIntegerMult;//Tell main thread to not cancel when pressing enter.
+            if matches!(*status,CalcOperations::StartedFactors){
+                *status=CalcOperations::StartedIntegerMult;//Tell main thread to not cancel when pressing enter.
             }
             if let (Ok(number_div),Ok(number_div_left),Ok(factors))
-                =(number_div_sr_read.lock(),number_div_left_sr_read.lock(),factors_sr_read.lock()){
+                =(number_div_sr_read.lock(),number_div_left_sr_read.lock(),factors_sr.lock()){
                 print!("\x1b[3F\x1b[0J");
                 println!("Attempting to divide number {} by {}. Number left: {}",number,number_div,number_div_left);
                 println!("Current factors: {}",utils::print_factors_helper(&factors));
             }
             println!("Press enter to calculate a, b, and |a-b|...");
-        });
+        }});
         if let Ok(())=utils::do_enter_wait(){
             if let Ok(mut status)=status_sr.lock(){
                 if matches!(*status,CalcOperations::StartedFactors){
