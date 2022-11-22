@@ -24,7 +24,7 @@ pub fn print_factors_helper(u64sl:&[u64])->String{
     for (i,(v,count)) in vec_freq.iter().enumerate(){
         let exp_str=if *count>1{
             let mut str=count.to_string();
-            str.insert_str(0,"^");
+            str.insert(0, '^');
             str
         }else{
             String::from("")

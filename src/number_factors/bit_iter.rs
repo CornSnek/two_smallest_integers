@@ -25,7 +25,7 @@ impl BitCombinationsIter{
             bits:1usize,
             size,
             init_started: false,
-            check_half_last: if size!=2{false}else{true},//2 is 1 0 and 0 1. Only iterate 1 0.
+            check_half_last: size == 2,//2 is 1 0 and 0 1. Only iterate 1 0.
         }
     }
 }

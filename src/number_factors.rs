@@ -75,10 +75,10 @@ impl NumberFactors{
                 *keep_read=false;
             }}}
         );
-        let number_div_sr_read=number_div_sr.clone();
-        let number_div_left_sr_read=number_div_left_sr.clone();
+        let number_div_sr_read=number_div_sr;
+        let number_div_left_sr_read=number_div_left_sr;
         let factors_sr_read=factors_sr.clone();
-        let keep_read_sr_read=keep_read_sr.clone();
+        let keep_read_sr_read=keep_read_sr;
         let status_sr_read=status_sr.clone();
         let read_handle=thread::spawn(move||{
             let mut keep_read=keep_read_sr_read.lock().unwrap();
@@ -206,12 +206,12 @@ impl NumberFactors{
             let mut status=status_sr_read.lock().unwrap();
             while matches!(*status,CalcOperations::StartedIntegerMult)&&srs_r.6{
                 drop(status);
-                let (abs_v,int_lhs,int_rhs,v_lhs,v_rhs,vec_split)=(srs_r.0,srs_r.1,srs_r.2,srs_r.3.clone(),srs_r.4.clone(),srs_r.5.clone());
+                let (abs_v,int_lhs,int_rhs,v_lhs,v_rhs,vec_split)=(srs_r.0,srs_r.1,srs_r.2,srs_r.3.clone(),srs_r.4.clone(),srs_r.5);
                 drop(srs_r);
                 use std::io::Write;
-                std::io::stdout().write("Partitioning and multiplying combinations of factors (a uses 1, b uses 0): ".as_bytes()).unwrap();
+                std::io::stdout().write_all("Partitioning and multiplying combinations of factors (a uses 1, b uses 0): ".as_bytes()).unwrap();
                 for i in 0..vec_size{
-                    std::io::stdout().write(if vec_split&(1u64<<i)!=0{b"1"}else{b"0"}).unwrap();
+                    std::io::stdout().write_all(if vec_split&(1u64<<i)!=0{b"1"}else{b"0"}).unwrap();
                 }
                 println!("\na: {} := {}\nb: {} := {}\n|a-b|: {}\n(Still in progress)",int_lhs,utils::print_factors_helper(&v_lhs),int_rhs,utils::print_factors_helper(&v_rhs),abs_v);
                 thread::sleep(std::time::Duration::from_millis(100));
@@ -241,6 +241,6 @@ impl NumberFactors{
         if let Ok(srs_get)=srs.lock(){
             println!("a: {} := {}\nb: {} := {}\n|a-b|: {}",srs_get.1,utils::print_factors_helper(&srs_get.3),srs_get.2,utils::print_factors_helper(&srs_get.4),srs_get.0);
         };
-        println!("");
+        println!();
     }
 }
