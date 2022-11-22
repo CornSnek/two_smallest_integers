@@ -5,22 +5,27 @@
 //This is valid if size is >=2.
 //There is a special case for size 1 for this code, where B can be empty.
 pub(super) struct BitCombinationsIter{
-    bitcomb:u64, //Number represented as 1s and 0s
-    bitcomb_last:u64, //If all bits reached this number.
+    //Number represented as 1s and 0s
+    bitcomb:u64,
+    //If all bits reached this number.
+    bitcomb_last:u64,
     bits:usize,
-    size:usize, //Size of part of the u64 based on BitCombinationsIter::new(size) 
-    init_started:bool, //The first set 1 0 ... 0 0 will not be skipped.
-    check_half_last: bool //For an even set, stop iterating where boolean values are flipped.
+    //Size of part of the u64 based on BitCombinationsIter::new(size)
+    size:usize,
+    //The first set 1 0 ... 0 0 will not be skipped.
+    init_started:bool,
+    //For an even set, stop iterating where boolean values are flipped.
+    check_half_last: bool
 }
 impl BitCombinationsIter{
     pub(super) fn new(size:usize)->Self{
         assert!(size!=0,"Size cannot be 0");
         Self{bitcomb:1u64,
-            bitcomb_last:bits_end_mask(size,1usize),
+            bitcomb_last:unsafe{bits_end_mask(size,1usize)},
             bits:1usize,
             size,
             init_started: false,
-            check_half_last: if size!=2{false}else{true}//2 is 1 0 and 0 1. Only iterate 1 0.
+            check_half_last: if size!=2{false}else{true},//2 is 1 0 and 0 1. Only iterate 1 0.
         }
     }
 }
@@ -43,8 +48,8 @@ impl Iterator for BitCombinationsIter{
                 }else if self.bits==self.size/2+1{
                     return None;
                 }
-                self.bitcomb=bits_reach_start(self.bits);
-                self.bitcomb_last=bits_end_mask(self.size,self.bits);
+                self.bitcomb=unsafe{bits_reach_start(self.bits)};
+                self.bitcomb_last=unsafe{bits_end_mask(self.size,self.bits)};
             }
         }else{
             self.init_started=true;
@@ -54,7 +59,7 @@ impl Iterator for BitCombinationsIter{
                 Some(self.bitcomb)
             }
             Some(last_bc)=>{
-                if self.bitcomb==!last_bc&bits_reach_start(self.size){//The next half is just flipped versions of 0s and 1s and backwards.
+                if self.bitcomb==!last_bc&unsafe{bits_reach_start(self.size)}{//The next half is just flipped versions of 0s and 1s and backwards.
                     None
                 }else{
                     Some(self.bitcomb)
@@ -63,8 +68,12 @@ impl Iterator for BitCombinationsIter{
         }
     }
 }
-fn bsf(n:u64)->isize{//From https://www.youtube.com/watch?v=ZRNO-ewsNcQ
-    if n==0{return -1;}
+fn next_bit_lex(n:u64)->u64{//From https://www.youtube.com/watch?v=ZRNO-ewsNcQ
+    let t=(n|(n-1)) as i64;
+    ((t+1)|((!t&-(!t))-1)>>(unsafe{bsf(n)+1})) as u64
+}
+unsafe fn bsf(n:u64)->isize{//From https://www.youtube.com/watch?v=ZRNO-ewsNcQ
+    if n==0 {std::hint::unreachable_unchecked();} //Will not be 0
     let nm=n&(-(n as i64) as u64);
     let mut count=0;
     if nm&0b1111111111111111111111111111111100000000000000000000000000000000!=0{count+=32}
@@ -75,15 +84,11 @@ fn bsf(n:u64)->isize{//From https://www.youtube.com/watch?v=ZRNO-ewsNcQ
     if nm&0b1010101010101010101010101010101010101010101010101010101010101010!=0{count+=1}
     count
 }
-fn next_bit_lex(n:u64)->u64{//From https://www.youtube.com/watch?v=ZRNO-ewsNcQ
-    let t=(n|(n-1)) as i64;
-    ((t+1)|((!t&-(!t))-1)>>(bsf(n)+1)) as u64
-}
-fn bits_reach_start(bits:usize)->u64{
-    assert!(bits<=64);
+unsafe fn bits_reach_start(bits:usize)->u64{
+    if bits>64 {unreachable!()} //Will not have >64 bits
     (1u64<<bits)-1
 }
-fn bits_end_mask(last_bit:usize,bits:usize)->u64{
-    assert!(bits<=last_bit&&last_bit<=64);
+unsafe fn bits_end_mask(last_bit:usize,bits:usize)->u64{
+    if bits>last_bit||last_bit>64 {unreachable!()} //Will not have >64 bits or larger mask
     ((1u64<<bits)-1)<<(last_bit-bits)
 }

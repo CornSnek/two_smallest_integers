@@ -22,12 +22,13 @@ impl NumberFactors{
         let factors_sr=Arc::new(Mutex::new(vec![1u64]));//Always divisible by 1. Divisors from smallest to largest.
         let keep_read_sr=Arc::new(Mutex::new(true));
         let status_sr=Arc::new(Mutex::new(CalcOperations::StartedFactors));
-        let number_div_sr_write=number_div_sr.clone();
-        let number_div_left_sr_write=number_div_left_sr.clone();
-        let factors_sr_write=factors_sr.clone();
-        let keep_read_sr_write=keep_read_sr.clone();
-        let status_sr_write=status_sr.clone();
-        let write_handle=thread::spawn(move||{
+        let write_handle=thread::spawn({
+            let number_div_sr_write=number_div_sr.clone();
+            let number_div_left_sr_write=number_div_left_sr.clone();
+            let factors_sr_write=factors_sr.clone();
+            let keep_read_sr_write=keep_read_sr.clone();
+            let status_sr_write=status_sr.clone();
+            move||{
             let mut number_div_left=number;
             let mut number_div=2u64;//Start divisor by 2.
             while number_div_left%number_div==0{
@@ -56,7 +57,7 @@ impl NumberFactors{
                     }
                 }
                 number_div=utils::next_possible_prime(number_div);
-                if number_div*3>=number_div_left{//If possible prime factors are exhausted down to 3, number_div is just number_div_left then.
+                if number_div*3>=number_div_left&&number_div_left!=1{//If possible prime factors are exhausted down to 3, number_div is just number_div_left then.
                     number_div=number_div_left;
                     number_div_left=1;
                     if let (Ok(mut factors),Ok(mut number_div_left_sr))=(factors_sr_write.lock(),number_div_left_sr_write.lock()){
@@ -72,8 +73,8 @@ impl NumberFactors{
             drop(status_sr);
             if let Ok(mut keep_read)=keep_read_sr_write.lock(){
                 *keep_read=false;
-            }
-        });
+            }}}
+        );
         let number_div_sr_read=number_div_sr.clone();
         let number_div_left_sr_read=number_div_left_sr.clone();
         let factors_sr_read=factors_sr.clone();
